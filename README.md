@@ -1,283 +1,473 @@
+<div align="center">
+
 # RepairLog
 
-RepairLog is a responsive café equipment fault and repair-management system.
-It helps a small café report machine problems quickly, understand which menu
-items are affected, coordinate repair work, record costs, and preserve a useful
-equipment history.
+### From equipment fault to verified repair—without losing the history.
 
-The first target is an invited production pilot with 3–5 independent cafés and
-approximately 20–50 users. This repository is under active development and is
-not yet evidence of production readiness.
+**A mobile-first operations system for independent cafés**
 
-## Product promise
+Report faults by QR code · Track repairs · Understand menu impact · Control costs
 
-A staff member should be able to scan a machine's QR code and submit a fault in
-under one minute. The café owner should immediately be able to find the issue,
-understand its service impact, manage its repair, and verify the outcome.
+`Next.js 16` · `TypeScript` · `Supabase` · `Netlify` · `Lemon Squeezy`
 
-RepairLog is not an accounting platform, point-of-sale system, technician
-marketplace, or predictive-maintenance product. At launch it is a focused
-operational record for one café location per organization.
+> **Development status:** database foundation configured; application modules
+> are being implemented. RepairLog is not yet production-ready.
 
-## Who uses RepairLog?
+</div>
 
-RepairLog has two application roles.
+---
 
-| Capability | Owner | Staff |
-| --- | :---: | :---: |
-| Sign in with Google | Yes | Yes |
-| View equipment and open faults | Yes | Yes |
-| Scan a QR code and report a fault | Yes | Yes |
-| Add operational repair updates | Yes | Yes |
-| Add, edit, archive, and print equipment QR codes | Yes | No |
-| Confirm equipment condition | Yes | No |
-| Verify or reopen a resolved ticket | Yes | No |
-| Configure menu dependencies | Yes | No |
-| Invite or remove staff | Yes | No |
-| View and record repair costs | Yes | No |
-| View exports, audit information, and billing | Yes | No |
+## Contents
 
-The database—not hidden buttons—enforces these boundaries. Removing a staff
-membership must immediately remove access to that café's records.
+- [The problem](#the-problem)
+- [How RepairLog works](#how-repairlog-works)
+- [Owner and staff experience](#owner-and-staff-experience)
+- [Workflow simulation](#workflow-simulation)
+- [System architecture](#system-architecture)
+- [Data architecture](#data-architecture)
+- [Security model](#security-model)
+- [Billing policy](#billing-policy)
+- [Repository structure](#repository-structure)
+- [Local development](#local-development)
+- [Delivery roadmap](#delivery-roadmap)
+- [Release gates](#release-gates)
 
-## Core concepts
+---
 
-### Organization and location
+## The problem
 
-Each café is an organization. An organization has its own currency, timezone,
-members, equipment, faults, costs, and billing record. Launch organizations
-have one location. All tenant-owned database relationships carry an
-`organization_id` so records from different cafés cannot be linked together.
+Small cafés often manage equipment faults through memory, chat messages, and
+paper notes. That makes four questions surprisingly difficult to answer:
 
-### Equipment condition
+1. What is broken right now?
+2. Which drinks or menu items are affected?
+3. What repair work has already been attempted?
+4. How much has the café spent fixing this equipment?
 
-Equipment condition is one of:
+RepairLog creates one dependable operational history—from the first staff
+report to the owner's final verification.
 
-- `operational`
-- `unavailable`
-- `unknown`
+### Product at a glance
 
-A staff fault report does not automatically make equipment unavailable. Only
-an owner confirms the operational condition.
+| | Launch behavior |
+|---|---|
+| **Customer** | Independent café with one location and a small team |
+| **Pilot** | 3–5 invited cafés, approximately 20–50 users |
+| **Primary action** | Scan equipment QR code and report a fault in under one minute |
+| **Roles** | Owner and staff |
+| **Authentication** | Google OAuth through Supabase Auth |
+| **Platform** | Responsive website; no native mobile application |
+| **Commercial model** | One-location subscription managed by Lemon Squeezy |
+| **Default posture** | Private, tenant-isolated, least privilege |
 
-### Ticket workflow
+---
 
-```text
-Open -> In progress -> Awaiting verification -> Resolved
+## How RepairLog works
+
+```mermaid
+flowchart LR
+    A["Scan equipment QR"] --> B["Describe the fault"]
+    B --> C["Create one idempotent ticket"]
+    C --> D["Owner confirms equipment condition"]
+    D --> E["Menu impact recalculates"]
+    E --> F["Record repair work and cost"]
+    F --> G["Owner verifies repair"]
+    G --> H["History remains searchable"]
+
+    classDef action fill:#e8f0ea,stroke:#355f47,color:#17251d,stroke-width:1.5px;
+    classDef decision fill:#fff4d6,stroke:#a66d10,color:#3b2a0d,stroke-width:1.5px;
+    class A,B,C,E,F,H action;
+    class D,G decision;
 ```
 
-Only an owner verifies resolution. An owner can reopen a ticket with a reason.
-Ticket status and equipment condition are independent: resolving a ticket must
-never silently mark its equipment operational.
+The system deliberately keeps **ticket status** and **equipment condition**
+separate. A new fault does not automatically declare a machine unusable, and a
+resolved ticket does not silently declare it operational. The owner confirms
+both decisions.
 
-### Menu impact
+### Ticket lifecycle
 
-Owners link menu items to the equipment required to prepare them.
+```mermaid
+stateDiagram-v2
+    [*] --> Open: Staff reports fault
+    Open --> InProgress: Work begins
+    InProgress --> AwaitingVerification: Repair reported complete
+    AwaitingVerification --> Resolved: Owner verifies
+    AwaitingVerification --> InProgress: Verification fails
+    Resolved --> Open: Owner reopens with reason
+    Resolved --> [*]
+```
 
-- Every required machine operational → `Available`
-- Any required machine unavailable → `Affected`
-- Otherwise → `Unknown`
-- No dependencies configured → `Not configured`
+### Equipment and menu impact
 
-An owner may add a plain-text alternative instruction. That instruction does
-not automatically represent a working replacement machine.
+```mermaid
+flowchart TD
+    M["Menu item"] --> Q{"Dependencies configured?"}
+    Q -->|No| NC["Not configured"]
+    Q -->|Yes| U{"Any required machine unavailable?"}
+    U -->|Yes| AF["Affected"]
+    U -->|No| K{"Every required machine operational?"}
+    K -->|Yes| AV["Available"]
+    K -->|No| UN["Unknown"]
 
-## End-to-end workflow simulation
+    classDef good fill:#e8f0ea,stroke:#355f47,color:#17251d;
+    classDef warn fill:#fff4d6,stroke:#a66d10,color:#3b2a0d;
+    classDef bad fill:#fde9e7,stroke:#b33a32,color:#451713;
+    class AV good;
+    class NC,UN warn;
+    class AF bad;
+```
 
-The following example shows how the launch product should behave.
+An owner-approved alternative is plain-text guidance for staff. It is not
+treated as proof that replacement equipment is available.
 
-### 1. Owner sets up the café
+---
 
-Shuvo signs in with Google and creates **North Street Café**. He chooses `USD`,
-the café's real IANA timezone, and creates its single launch location. RepairLog
-creates his active owner membership in the same atomic operation.
+## Owner and staff experience
 
-He adds an **Espresso Machine**, assigns its category, and initially confirms it
-as operational. RepairLog generates an equipment QR code, which he prints and
-places beside the machine.
+### Owner
 
-He creates the menu item **Latte** and links the Espresso Machine as a required
-dependency. Latte now appears available because all its required equipment is
-operational.
+The owner controls business configuration and verified operational truth.
 
-### 2. Owner invites a staff member
+- Creates the café and its launch location.
+- Adds, edits, archives, and labels equipment.
+- Prints equipment QR codes.
+- Invites and removes staff.
+- Confirms equipment condition.
+- Configures menu items and equipment dependencies.
+- Records technician details and repair costs.
+- Verifies resolution or reopens a ticket with a reason.
+- Views billing, exports, audit history, and daily expense totals.
 
-Shuvo sends an invitation to a specific staff email address. The invitation
-stores a hash of its token, intended email, expiry, and acceptance state.
+### Staff
 
-The staff member must sign into the correct Google account. RepairLog rejects
-an expired, replayed, revoked, or wrong-email invitation. Once accepted, an
-active staff membership grants access only to North Street Café.
+Staff receive a deliberately focused operational experience.
 
-### 3. Staff reports a fault
+- Signs in using an invited Google account.
+- Scans a QR code to open the correct equipment report.
+- Reports a fault with category, priority, description, and optional photos.
+- Views permitted equipment, open tickets, repair notes, and menu impact.
+- Adds operational updates while work is underway.
+- Cannot see costs or billing, manage roles, confirm equipment condition, or
+  verify final resolution.
 
-During service, the Espresso Machine begins losing pressure. The staff member
-scans its QR code, signs in if necessary, and sees a short report form already
-bound to that equipment.
+### Permission boundary
 
-They select a category and priority, describe the pressure problem, and submit
-the text report. The browser supplies a unique request ID. If a slow connection
-causes the user to submit twice, the database returns the original ticket
-instead of creating a duplicate.
+| Area | Owner | Staff | Enforced by |
+|---|:---:|:---:|---|
+| Equipment and ticket visibility | ✓ | ✓ | Membership RLS |
+| Submit faults and updates | ✓ | ✓ | Authorized database functions |
+| Equipment administration | ✓ | — | Owner check + database function |
+| Condition confirmation | ✓ | — | Owner check + version control |
+| Resolution verification | ✓ | — | Owner-only transition rule |
+| Repair costs | ✓ | — | Separate financial table + RLS |
+| Team management | ✓ | — | Owner-only invitation functions |
+| Billing and exports | ✓ | — | Owner RLS + server authorization |
 
-The text ticket is committed before photos. Up to two JPEG, PNG, or WebP photos
-can then upload directly to the private Supabase Storage bucket. A failed image
-upload can be retried without losing the fault report.
+Hiding a control in the interface is never considered authorization.
 
-The new ticket is `open`, but the equipment condition remains unchanged until
-the owner checks it.
+---
 
-### 4. Owner confirms operational impact
+## Workflow simulation
 
-Shuvo opens the ticket, checks the machine, and changes its condition to
-`unavailable`. Because Latte requires this machine, Latte becomes `Affected`.
-The Today page includes the unresolved fault and affected menu item.
+This example follows one incident from setup to verified recovery.
 
-If another user changed the same equipment record first, RepairLog compares
-record versions and returns a conflict instead of silently overwriting data.
+### Scene 1 — Café setup
 
-### 5. Repair work is recorded
+Shuvo signs in with Google and creates **North Street Café**. He selects the
+café's currency and actual IANA timezone. RepairLog atomically creates the
+organization, its single launch location, and Shuvo's owner membership.
 
-The ticket moves to `in_progress`. Staff can add operational notes, while the
-owner records the technician's name, work performed, work date, and optional
-repair cost. Costs use integer minor units—for example, `$125.50` is stored as
-`12550` with currency `USD`—and remain invisible to staff.
+He adds an **Espresso Machine**, confirms it is operational, and prints its QR
+label. He then creates a **Latte** menu item and marks the Espresso Machine as a
+required dependency. Latte displays as `Available`.
 
-After the technician finishes, the ticket moves to `awaiting_verification`.
+### Scene 2 — Staff onboarding
 
-### 6. Owner verifies the result
+Shuvo invites Maya using her work email. The invitation contains a hashed
+token, intended email, expiration, and acceptance state. Maya must authenticate
+with that same Google email. Wrong-email, expired, revoked, and replayed
+invitations are rejected.
 
-Shuvo tests the machine. If the repair failed, he returns the ticket to active
-work. If it passed, he marks the ticket `resolved`. He separately confirms the
-equipment as `operational`, after which Latte returns to `Available`.
+When accepted, Maya receives an active staff membership in North Street Café—
+not access to any other RepairLog organization.
 
-The equipment detail page keeps the original report, attachments, repair
-updates, technician details, cost history, authors, and timestamps.
+### Scene 3 — Fault report during service
 
-## Today page
+The Espresso Machine starts losing pressure. Maya scans its QR code and sees a
+short report form already connected to that machine. She selects **High**
+priority, describes the pressure loss, and submits.
 
-The Today page is the launch handover and daily-summary surface. It shows:
+The browser supplies a unique request ID. Even if a slow connection causes a
+double tap or retry, the database creates only one ticket.
 
-- unresolved faults;
-- equipment and menu items currently affected;
-- unknown equipment conditions requiring owner confirmation;
-- today's owner-visible repair expenses; and
-- when the displayed information was last refreshed.
+The text report commits first. Maya can then upload up to two compressed JPEG,
+PNG, or WebP photos to private Storage. If an upload fails, the written report
+remains safe and the photo can be retried.
 
-The launch UI fetches on screen opening, refreshes after related mutations, and
-refreshes stale information when the browser regains focus. It does not use
-continuous polling or realtime subscriptions.
+### Scene 4 — Operational impact
+
+The ticket opens, but the machine's condition remains unchanged. Shuvo checks
+the equipment and confirms it as `Unavailable`. Latte immediately becomes
+`Affected` because one required dependency is unavailable.
+
+The Today page now shows the open fault and affected menu item. Staff can see
+that operational impact but cannot change the owner's verified condition.
+
+### Scene 5 — Repair and cost
+
+The ticket moves to `In progress`. Maya records an operational note. Later,
+Shuvo records the technician's name, work performed, work date, and a `$125.50`
+cost. The database stores that amount as `12550` minor units with `USD`; staff
+cannot read the financial record.
+
+The technician completes the work and the ticket moves to
+`Awaiting verification`.
+
+### Scene 6 — Verification and history
+
+Shuvo tests the machine. If it fails, he returns the ticket to active work. If
+it passes, he marks the ticket `Resolved` and separately confirms the machine
+as `Operational`. Latte returns to `Available`.
+
+The equipment record permanently retains the original fault, photos, repair
+updates, technician details, authors, timestamps, and owner-only costs.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor O as Owner
+    actor S as Staff
+    participant W as RepairLog
+    participant DB as Supabase
+
+    O->>W: Add machine and print QR
+    W->>DB: Save tenant-owned equipment
+    S->>W: Scan QR and report fault
+    W->>DB: Create idempotent ticket
+    DB-->>W: Return committed ticket
+    O->>W: Confirm machine unavailable
+    W->>DB: Version-checked condition update
+    DB-->>W: Menu item becomes affected
+    O->>W: Record repair and private cost
+    W->>DB: Save history and financial record
+    O->>W: Verify repair
+    W->>DB: Resolve ticket
+    O->>W: Confirm machine operational
+    DB-->>W: Menu item becomes available
+```
+
+---
 
 ## System architecture
 
-RepairLog is one Next.js modular monolith deployed to Netlify.
+RepairLog is a **single Next.js modular monolith**. It has no separate API host
+or permanently running worker.
 
-```text
-Browser
-|-- Supabase Auth (Google OAuth)
-|-- compact RLS-protected reads through the Supabase Data API
-|-- direct authorized uploads to private Supabase Storage
-`-- business mutations sent to Next.js
+```mermaid
+flowchart TB
+    subgraph Client["Browser — mobile and desktop"]
+        UI["Next.js interface"]
+        Session["Supabase user session"]
+    end
 
-Next.js on Netlify
-|-- verifies identity, input, membership, role, and entitlement
-|-- invokes atomic PostgreSQL mutation functions
-|-- creates Lemon Squeezy checkout and portal requests
-|-- verifies and persists Lemon Squeezy webhooks
-`-- authorizes private file operations
+    subgraph Netlify["Netlify"]
+        App["Next.js server"]
+        Webhook["Verified billing webhook"]
+        Worker["Scheduled billing worker"]
+    end
 
-Supabase
-|-- PostgreSQL durable data
-|-- row-level security and database constraints
-|-- private image storage
-`-- durable billing/reconciliation jobs
+    subgraph Supabase["Supabase"]
+        Auth["Google OAuth / Auth"]
+        API["HTTP Data API"]
+        DB[("PostgreSQL + RLS")]
+        Storage[("Private photo storage")]
+        Jobs["Durable job leases"]
+    end
 
-Netlify scheduled function
-`-- bounded billing synchronization using database leases
+    LS["Lemon Squeezy\nfinancial source of truth"]
+    Resend["Resend\ntransactional email"]
 
-Lemon Squeezy
-`-- authoritative subscription and financial facts
+    UI -->|"Authenticate"| Auth
+    Auth --> Session
+    UI -->|"Compact authorized reads"| API
+    API --> DB
+    UI -->|"Business mutations"| App
+    App -->|"User-scoped atomic RPC"| DB
+    UI -->|"Authorized direct upload"| Storage
+    App -->|"Create checkout / portal"| LS
+    LS -->|"Signed event"| Webhook
+    Webhook -->|"Persist event + enqueue"| DB
+    DB --> Jobs
+    Worker -->|"Lease bounded batch"| Jobs
+    Worker -->|"Fetch canonical state"| LS
+    Worker -->|"Update projection"| DB
+    Auth -->|"Verification / recovery mail"| Resend
 ```
 
-There is no separate API server, permanent worker, Redis instance, LLM,
-chatbot, native mobile app, or public image bucket at launch.
+### Request ownership
+
+| Layer | Responsibility |
+|---|---|
+| **Browser** | Render UI, hold user session, make compact reads, compress/upload photos |
+| **Next.js** | Validate identity, input, membership, role, origin, and entitlement |
+| **PostgreSQL** | Enforce tenant boundaries, invariants, idempotency, and atomic writes |
+| **Storage** | Keep photos private with bounded type, size, count, and signed access |
+| **Scheduled worker** | Retry and reconcile billing without a permanent service |
+| **Lemon Squeezy** | Own subscription status, dates, invoices, and customer billing |
+
+---
+
+## Data architecture
+
+### Operational domain
+
+```mermaid
+erDiagram
+    ORGANIZATIONS ||--|| LOCATIONS : contains
+    ORGANIZATIONS ||--o{ MEMBERSHIPS : authorizes
+    ORGANIZATIONS ||--o{ INVITATIONS : issues
+    LOCATIONS ||--o{ EQUIPMENT : holds
+    EQUIPMENT ||--o{ TICKETS : receives
+    TICKETS ||--o{ REPAIR_UPDATES : records
+    TICKETS ||--o{ REPAIR_COSTS : costs
+    TICKETS ||--o{ ATTACHMENTS : includes
+    ORGANIZATIONS ||--o{ MENU_ITEMS : defines
+    MENU_ITEMS ||--o{ MENU_DEPENDENCIES : requires
+    EQUIPMENT ||--o{ MENU_DEPENDENCIES : affects
+    MEMBERSHIPS ||--o| USER_PREFERENCES : stores
+    ORGANIZATIONS ||--o{ AUDIT_EVENTS : audits
+```
+
+### Billing and recovery domain
+
+```mermaid
+erDiagram
+    ORGANIZATIONS ||--o{ BILLING_CHECKOUT_ATTEMPTS : starts
+    BILLING_CHECKOUT_ATTEMPTS o|--o| BILLING_SUBSCRIPTIONS : binds
+    BILLING_SUBSCRIPTIONS ||--o{ BILLING_INVOICES : projects
+    ORGANIZATIONS ||--o{ BILLING_EVENTS : receives
+    ORGANIZATIONS ||--o{ JOBS : schedules
+```
+
+The database contains 18 launch tables. Financial data is intentionally stored
+outside staff-readable operational records because RLS secures rows, not
+arbitrary sensitive columns inside an otherwise visible row.
+
+### Important invariants
+
+- UUID application identifiers and UTC timestamps.
+- Organization timezone controls local display and day boundaries.
+- Composite tenant foreign keys prevent cross-organization relationships.
+- Money uses integer minor units and explicit currency.
+- One launch location per organization.
+- At most two photo attachment slots per ticket.
+- Equipment and ticket records use monotonically increasing versions.
+- The last active organization owner cannot be removed.
+- Duplicate ticket submissions share one organization, actor, and request ID.
+- Billing events deduplicate by environment, store, event type, resource, and
+  payload hash—not resource ID alone.
+
+---
 
 ## Security model
 
-- Every exposed application table has row-level security enabled.
-- Browser requests use the publishable key and the signed-in user's session.
-- Ordinary server mutations retain the user's database identity, so RLS still
-  applies.
-- Only narrow billing and recovery work may use the server-only Supabase secret
-  key.
-- Financial tables are separate from staff-readable operational tables.
-- Business writes use atomic database functions and expected record versions.
+```mermaid
+flowchart LR
+    R["Incoming mutation"] --> I{"Authenticated?"}
+    I -->|No| X["Reject"]
+    I -->|Yes| V{"Input valid and bounded?"}
+    V -->|No| X
+    V -->|Yes| M{"Active membership?"}
+    M -->|No| X
+    M -->|Yes| P{"Role permits action?"}
+    P -->|No| X
+    P -->|Yes| E{"Subscription permits write?"}
+    E -->|No| RO["Read / export / billing only"]
+    E -->|Yes| T["Atomic database transaction"]
+    T --> C{"Expected version matches?"}
+    C -->|No| CF["Return conflict; preserve draft"]
+    C -->|Yes| OK["Return committed record"]
+```
+
+### Non-negotiable controls
+
+- Default-deny RLS on every exposed table and private Storage object.
+- Browser code uses only the publishable key and authenticated session.
+- Ordinary server writes retain the user's database identity.
+- The elevated Supabase secret key is limited to narrow billing/recovery jobs.
+- Server actions and route handlers authorize every mutation independently.
+- Invitation acceptance checks intended email, expiry, replay, and revocation.
 - Cookie-authenticated endpoints validate request origin.
-- Invitation acceptance validates intended email, expiry, replay, and revocation.
-- The last active owner cannot be removed.
-- Private image paths are random and tenant-scoped; signed links are short-lived.
-- Secrets must never be committed, logged, sent to the browser, or pasted into
-  ordinary chat.
+- Private URLs, tokens, raw billing payloads, and credentials never enter logs.
+- Tenant-specific and financial responses never use shared public caching.
+- Logout and organization switching clear user/tenant caches.
 
-## Billing access policy
+---
 
-Lemon Squeezy owns subscription status and financial dates. RepairLog stores a
-local projection for authorization and display.
+## Billing policy
 
-| Provider status | RepairLog access |
-| --- | --- |
-| `on_trial` | Allowed until the provider trial boundary |
-| `active` | Allowed |
-| `cancelled` | Allowed only until provider `ends_at` |
-| `past_due` | Existing operations remain available during provider retries; owner sees a payment action |
-| `unpaid` or `expired` | Read, export, and billing only; new paid operations blocked |
-| `paused` | Read, export, and billing only |
-| Unknown or absent | Onboarding, demo, and billing only |
+Lemon Squeezy remains authoritative for subscription status and financial
+dates. A successful browser redirect is never proof of payment.
 
-A checkout redirect never grants access. Verified webhook processing and
-canonical provider reconciliation update the billing projection. If projection
-data is older than 24 hours, new paid writes are restricted until refreshed,
-without extending access past a known provider boundary.
+| Provider state | Application policy |
+|---|---|
+| `on_trial` | Full access until the verified provider trial boundary |
+| `active` | Full access |
+| `cancelled` | Access until verified `ends_at` |
+| `past_due` | Existing operations continue during provider retries; owner sees payment action |
+| `unpaid` / `expired` | Read, export, and billing access; new paid writes blocked |
+| `paused` | Read, export, and billing access |
+| Unknown / absent | Onboarding, demo, and billing only |
+
+If the local provider projection is older than 24 hours, RepairLog restricts
+new paid writes until it refreshes. It never invents a financial date or
+extends access beyond a known provider boundary.
+
+---
 
 ## Repository structure
 
 ```text
-app/                    Next.js pages, layouts, and route handlers
-components/             Shared visual components
-database/               Ordered table-by-table Supabase SQL source
-lib/auth/               Session and identity helpers
-lib/permissions/        Owner/staff authorization checks
-lib/supabase/           Browser, user-scoped server, and elevated clients
-lib/modules/            Organization, team, equipment, ticket, and other domains
-lib/providers/          Lemon Squeezy adapter
-lib/jobs/               Billing synchronization and reconciliation logic
-netlify/functions/      Scheduled billing worker entry point
-supabase/migrations/    Deployable chronological migrations
-tests/                  Permissions, workflows, billing, recovery, E2E, and load tests
-scripts/                Backup and restore tools
-docs/architecture/      Architecture documentation
+repairlog/
+├── app/                       routes, layouts, and HTTP endpoints
+│   ├── (marketing)/           public product pages
+│   ├── (auth)/                sign-in and OAuth flows
+│   ├── (dashboard)/           authenticated product screens
+│   └── api/                   billing and webhook endpoints
+├── components/                shared presentation components
+├── database/                  ordered table-by-table Supabase SQL
+├── lib/
+│   ├── auth/                  sessions and identity
+│   ├── permissions/           owner/staff authorization
+│   ├── supabase/              browser, server, and elevated clients
+│   ├── modules/               domain business logic
+│   ├── providers/             Lemon Squeezy adapter
+│   └── jobs/                  billing recovery handlers
+├── netlify/functions/         scheduled worker entry point
+├── supabase/migrations/       deployable schema history
+├── tests/                     permissions, workflows, E2E, billing, load
+├── scripts/                   backup and restore operations
+└── docs/architecture/         architecture decisions and maps
 ```
 
-See [`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md)
-for the detailed module and route map.
+Detailed boundaries are documented in
+[`docs/architecture/folder-structure.md`](docs/architecture/folder-structure.md).
 
-## Database
+---
 
-The [`database/`](database/) directory contains ordered SQL definitions for all
-18 launch tables plus authorization helpers, integrity triggers, RLS policies,
-and private Storage configuration.
+## Local development
 
-For a new Supabase environment, run SQL files in filename order. Table files
-`010`–`180` are one-time schema creation files. Files `800`, `810`, `900`, and
-`910` apply security and operational behavior; the trigger and policy files are
-safe to rerun where documented.
+### Prerequisites
 
-Do not edit an already-applied production migration. Add a new chronological
-migration for every later schema change.
+- Node.js and npm
+- Configured Supabase project
+- Google OAuth provider enabled in Supabase
+- Database files applied in order
 
-## Local configuration
+### Environment
 
-Copy `.env.example` to `.env.local` and provide the local values:
+Copy `.env.example` to `.env.local`:
 
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=
@@ -287,36 +477,28 @@ SUPABASE_PROJECT_REF=
 SUPABASE_SECRET_KEY=
 ```
 
-`NEXT_PUBLIC_*` values are browser-safe identifiers. `SUPABASE_SECRET_KEY`
-bypasses RLS and is server-only. Never prefix a secret with `NEXT_PUBLIC_`.
+The secret key bypasses RLS. It is server-only and must never use a
+`NEXT_PUBLIC_` prefix.
 
-Supabase Auth currently uses Google OAuth. Configure the Google provider in the
-Supabase dashboard and use this provider callback pattern:
+### Google authentication
+
+Provider callback:
 
 ```text
 https://<project-ref>.supabase.co/auth/v1/callback
 ```
 
-For local application redirects, configure:
+Local Supabase Auth URL configuration:
 
 ```text
 Site URL:     http://localhost:3000
 Redirect URL: http://localhost:3000/**
 ```
 
-Production must later use the exact HTTPS application URL, with separately
-controlled Netlify preview redirects.
+Production later uses the exact HTTPS application URL and separately controlled
+Netlify preview redirects.
 
-## Run locally
-
-Requirements:
-
-- a supported Node.js release;
-- npm;
-- a configured Supabase project; and
-- the local environment values above.
-
-Install and run:
+### Start the application
 
 ```bash
 npm install
@@ -325,76 +507,109 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Project checks:
+### Quality checks
 
 ```bash
 npm run lint
 npm run build
 ```
 
-The final application should self-host its font or use a system font so builds
-do not depend on downloading Google Fonts.
+The finished application will self-host its font or use a system font so the
+production build does not rely on downloading Google Fonts.
 
-## Development sequence
+### Database source
 
-Work follows security and dependency order:
+The [`database/`](database/) directory contains one ordered SQL source file per
+table followed by authorization helpers, integrity triggers, RLS, and Storage
+configuration.
 
-1. Google authentication, session handling, and protected routes.
-2. Atomic organization creation, owner membership, invitations, and tenant
-   isolation tests.
-3. Equipment management and printable QR codes.
-4. Idempotent fault reporting, tickets, and private attachments.
-5. Repair workflow, owner-only costs, menu impact, and Today summary.
-6. Lemon Squeezy checkout, verified webhooks, jobs, and reconciliation.
-7. First-use guidance, export/recovery, responsive polish, and release checks.
+For a new environment, apply the files in filename order. Do not rerun one-time
+table creation files `010`–`180` after those tables exist. Never rewrite an
+already-applied production migration; create a new chronological migration.
 
-Do not begin detailed marketing-page work before authentication, tenant
-isolation, and the core reporting workflow are demonstrated.
+---
 
-## Current implementation status
+## Delivery roadmap
 
-- [x] Next.js and TypeScript project initialized.
-- [x] Module-oriented repository structure created.
-- [x] All 18 launch database tables defined and applied.
-- [x] Authorization helpers, integrity triggers, RLS policies, and private
-      Storage definition created and applied.
-- [x] Supabase project, local URL configuration, and Google provider configured.
-- [ ] Google sign-in UI, OAuth callback, session handling, and logout.
-- [ ] Atomic organization/team functions and cross-tenant tests.
-- [ ] Equipment, QR reporting, tickets, repairs, menu impact, and Today UI.
-- [ ] Billing integration and scheduled reconciliation worker.
-- [ ] Recovery drill, performance tests, and production release gates.
+```mermaid
+flowchart LR
+    D1["1 · Auth and tenant isolation"] --> D2["2 · Equipment and QR"]
+    D2 --> D3["3 · Faults and tickets"]
+    D3 --> D4["4 · Repairs, costs, menu impact"]
+    D4 --> D5["5 · Billing and recovery"]
+    D5 --> D6["6 · Pilot validation"]
 
-## Launch release gates
+    classDef current fill:#fff4d6,stroke:#a66d10,color:#3b2a0d,stroke-width:2px;
+    class D1 current;
+```
 
-The pilot must not launch until the applicable gates pass, including:
+### Current status
 
-- owner and staff workflows work on mobile and desktop;
-- two businesses cannot access each other's records or photos;
-- staff cannot read costs or billing, manage roles, or verify repairs;
-- duplicate submissions create one ticket;
-- concurrent edits return a conflict rather than losing data;
-- failed photo uploads preserve the text report;
-- invalid and duplicate billing webhooks are safely rejected or deduplicated;
-- checkout redirects alone never grant paid access;
-- backup and private-object restore procedures are exercised;
-- no production secrets appear in client bundles, logs, or Git; and
-- no unresolved tenant-leak, billing-integrity, or data-loss defect remains.
+| Area | Status |
+|---|---|
+| Next.js + TypeScript project | Complete |
+| Module-oriented folder structure | Complete |
+| 18 launch database tables | Applied |
+| Authorization helpers and integrity triggers | Applied |
+| RLS and private Storage definition | Applied |
+| Supabase project and Google provider | Configured |
+| Google sign-in, callback, session, logout | **Next** |
+| Organization creation and invitations | Pending |
+| Cross-tenant security tests | Pending |
+| Equipment, QR, tickets, repairs, menu impact | Pending |
+| Billing and scheduled reconciliation | Pending |
+| Recovery and production release gates | Pending |
 
-## Launch scope exclusions
+Detailed landing-page work begins only after authentication, tenant isolation,
+and the core reporting workflow are demonstrated.
 
-The initial pilot intentionally excludes AI assistants, voice transcription,
-WhatsApp, external technician accounts, multi-location billing, inventory,
-purchase orders, POS integrations, estimated lost revenue, offline sync, push
-notifications, live collaboration, advanced charts, and bulk imports.
+---
+
+## Release gates
+
+The invited pilot does not launch until applicable checks pass:
+
+- [ ] Owner and staff workflows work on mobile and desktop.
+- [ ] Business A cannot read or write Business B's records or photos.
+- [ ] Staff cannot access costs, billing, roles, or repair verification.
+- [ ] Direct API/RPC calls cannot bypass permissions or entitlement.
+- [ ] Duplicate fault submission creates one ticket.
+- [ ] Concurrent edits return a conflict instead of losing changes.
+- [ ] Failed photo upload preserves the text report.
+- [ ] Invalid webhook signatures are rejected.
+- [ ] Duplicate and out-of-order billing events are safe.
+- [ ] Checkout redirects alone never grant paid access.
+- [ ] Database and private-object recovery is exercised.
+- [ ] No production secrets appear in browser bundles, logs, or Git.
+- [ ] No unresolved tenant leak, data-loss, or billing-integrity defect remains.
+
+---
+
+## Intentionally outside launch scope
+
+AI assistants, chatbots, voice transcription, WhatsApp, external technician
+accounts, multiple locations, inventory, purchase orders, POS integration,
+estimated lost revenue, offline sync, push notifications, live collaboration,
+advanced charts, and bulk imports.
+
+Keeping these outside the pilot protects delivery time for tenant isolation,
+correct repair history, billing integrity, recovery, and testing.
+
+---
 
 ## Governing documents
 
-Product scope and technical decisions are defined by the workspace documents:
+This README summarizes the workspace's authoritative planning documents:
 
-- `01-RepairLog-Launch-Plan.md`
-- `02-RepairLog-System-Design.md`
-- `03-RepairLog-Providers-Costs-Credentials.md`
+1. `01-RepairLog-Launch-Plan.md`
+2. `02-RepairLog-System-Design.md`
+3. `03-RepairLog-Providers-Costs-Credentials.md`
 
-When implementation details conflict with those documents, resolve the
-conflict explicitly rather than silently expanding the launch scope.
+If implementation and documentation conflict, resolve the conflict explicitly;
+never silently weaken tenant isolation, billing validation, or recovery.
+
+<div align="center">
+
+**RepairLog — clear faults, accountable repairs, dependable history.**
+
+</div>
