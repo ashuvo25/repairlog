@@ -8,6 +8,7 @@ create table public.organizations (
   onboarding_state jsonb not null default '{}'::jsonb
     check (jsonb_typeof(onboarding_state) = 'object'),
   created_by uuid not null references auth.users(id),
+  creation_request_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint organizations_tenant_key unique (id)
@@ -17,5 +18,8 @@ create trigger organizations_set_updated_at
 before update on public.organizations
 for each row execute function private.set_updated_at();
 
-commit;
+create unique index organizations_creation_request_idx
+  on public.organizations (created_by, creation_request_id)
+  where creation_request_id is not null;
 
+commit;

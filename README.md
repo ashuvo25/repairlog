@@ -540,7 +540,7 @@ flowchart LR
     D5 --> D6["6 · Pilot validation"]
 
     classDef current fill:#fff4d6,stroke:#a66d10,color:#3b2a0d,stroke-width:2px;
-    class D1 current;
+    class D2 current;
 ```
 
 ### Current status
@@ -553,10 +553,13 @@ flowchart LR
 | Authorization helpers and integrity triggers | Applied |
 | RLS and private Storage definition | Applied |
 | Supabase project and Google provider | Configured |
-| Google sign-in, callback, session, logout | **Next** |
-| Organization creation and invitations | Pending |
-| Cross-tenant security tests | Pending |
-| Equipment, QR, tickets, repairs, menu impact | Pending |
+| Google sign-in, callback, session, logout | Implemented locally |
+| Atomic organization creation | Applied and working |
+| Staff invitations | Pending |
+| Cross-tenant security tests | Added; local Supabase execution pending |
+| Equipment management and printable QR labels | Implemented; migration `940` must be applied |
+| Public report submission and owner inbox | Pending |
+| Tickets, repairs and menu impact | Pending |
 | Billing and scheduled reconciliation | Pending |
 | Recovery and production release gates | Pending |
 

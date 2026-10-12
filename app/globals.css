@@ -1,26 +1,284 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f5ef;
+  --foreground: #17251d;
+  --surface: #fffdf8;
+  --subtle: #f1efe8;
+  --muted: #5d695f;
+  --border: #dce2da;
+  --border-strong: #b8c7bb;
+  --primary: #355f47;
+  --primary-hover: #294b38;
+  --primary-soft: #e8f0ea;
+  --primary-border: #bfd5c5;
+  --attention: #73500f;
+  --attention-soft: #fff4d6;
+  --attention-border: #e9cf8d;
+  --danger: #7b2d27;
+  --danger-soft: #fff0ed;
+  --danger-border: #e7b5ae;
+  --success: #2f6a47;
+  --success-soft: #e6f1e9;
+  --success-border: #b9d6c3;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-border: var(--primary-border);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-attention-border: var(--attention-border);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-border: var(--danger-border);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-border: var(--success-border);
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+button:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+summary {
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--primary);
+}
+
+/* Café palette: warm off-white, espresso and sage.
+   The signed-in app keeps the calmer default palette. */
+.theme-bistro {
+  --background: #f8f5f0;
+  --foreground: #2b2420;
+  --surface: #ffffff;
+  --subtle: #f2ede6;
+  --muted: #6b6058;
+  --border: #e7e0d7;
+  --border-strong: #cfc4b6;
+  --primary: #3e2c23;
+  --primary-hover: #2b1e17;
+  --primary-soft: #efe8e2;
+  --primary-border: #d9cbc0;
+  --success: #4c6b50;
+  --success-soft: #e7efe7;
+  --success-border: #c1d3c2;
+  --attention: #8a5a0b;
+  --attention-soft: #fbefd5;
+  --attention-border: #ecd29a;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Dotted leader between a menu item and its price or status. */
+.menu-leader {
+  flex: 1;
+  min-width: 1.5rem;
+  border-bottom: 2px dotted currentColor;
+  opacity: 0.35;
+  transform: translateY(-0.3em);
+}
+
+/* Sign-in scene: every looping animation shares one 10s timeline. */
+@keyframes rl-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes rl-float {
+  to {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes rl-drift {
+  to {
+    transform: translate(6%, 8%) scale(1.15);
+  }
+}
+
+@keyframes rl-rock {
+  from {
+    transform: rotate(-14deg);
+  }
+  to {
+    transform: rotate(14deg);
+  }
+}
+
+@keyframes rl-scan {
+  from {
+    top: 8%;
+  }
+  to {
+    top: 90%;
+  }
+}
+
+@keyframes rl-show-a {
+  0%, 3% { opacity: 0; transform: translateY(var(--rl-shift, 0px)); }
+  8%, 95% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+@keyframes rl-show-b {
+  0%, 25% { opacity: 0; transform: translateY(var(--rl-shift, 0px)); }
+  30%, 95% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+@keyframes rl-show-c {
+  0%, 50% { opacity: 0; transform: translateY(var(--rl-shift, 0px)); }
+  55%, 95% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+@keyframes rl-show-d {
+  0%, 75% { opacity: 0; transform: translateY(var(--rl-shift, 0px)); }
+  80%, 95% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+@keyframes rl-window-a {
+  0%, 3% { opacity: 0; }
+  8%, 25% { opacity: 1; }
+  30%, 100% { opacity: 0; }
+}
+
+@keyframes rl-window-b {
+  0%, 25% { opacity: 0; }
+  30%, 75% { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+
+@keyframes rl-progress {
+  0%, 8% { transform: scaleX(0); }
+  30% { transform: scaleX(0.333); }
+  55% { transform: scaleX(0.667); }
+  80%, 95% { transform: scaleX(1); }
+  100% { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rl-enter {
+    animation: rl-enter 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--rl-delay, 0ms);
+  }
+
+  .rl-float {
+    animation: rl-float 5s ease-in-out infinite alternate;
+  }
+
+  .rl-float-slow {
+    animation: rl-float 6.5s ease-in-out -2s infinite alternate;
+  }
+
+  .rl-drift {
+    animation: rl-drift 14s ease-in-out infinite alternate;
+  }
+
+  .rl-rock {
+    animation: rl-rock 1.4s ease-in-out infinite alternate;
+  }
+
+  .rl-scan {
+    animation: rl-scan 2.2s ease-in-out infinite alternate;
+  }
+
+  .rl-show-a {
+    animation: rl-show-a 10s ease-in-out infinite;
+  }
+
+  .rl-show-b {
+    animation: rl-show-b 10s ease-in-out infinite;
+  }
+
+  .rl-show-c {
+    animation: rl-show-c 10s ease-in-out infinite;
+  }
+
+  .rl-show-d {
+    animation: rl-show-d 10s ease-in-out infinite;
+  }
+
+  .rl-window-a {
+    animation: rl-window-a 10s ease-in-out infinite;
+  }
+
+  .rl-window-b {
+    animation: rl-window-b 10s ease-in-out infinite;
+  }
+
+  .rl-progress {
+    animation: rl-progress 10s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .qr-print-card,
+  .qr-print-card * {
+    visibility: visible;
+  }
+
+  .qr-print-card {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .qr-screen-actions {
+    display: none !important;
+  }
 }
