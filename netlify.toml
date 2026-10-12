@@ -5,8 +5,9 @@
 [build.environment]
   # Netlify scans the build for environment variable values. These ones are
   # public by design: NEXT_PUBLIC_* values ship to the browser, and the rest
-  # are the site address or plain provider IDs, not credentials.
-  SECRETS_SCAN_OMIT_KEYS = "APP_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,NEXT_PUBLIC_TURNSTILE_SITE_KEY,SUPABASE_PROJECT_REF,LEMONSQUEEZY_STORE_ID,LEMONSQUEEZY_VARIANT_ID_MONTHLY,LEMONSQUEEZY_VARIANT_ID_YEARLY,LEMONSQUEEZY_TEST_MODE"
+  # are the site address, plain provider IDs or old setup defaults (unused by
+  # the app), not credentials.
+  SECRETS_SCAN_OMIT_KEYS = "APP_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,NEXT_PUBLIC_TURNSTILE_SITE_KEY,SUPABASE_PROJECT_REF,LEMONSQUEEZY_STORE_ID,LEMONSQUEEZY_VARIANT_ID_MONTHLY,LEMONSQUEEZY_VARIANT_ID_YEARLY,LEMONSQUEEZY_TEST_MODE,LEMONSQUEEZY_WEBHOOK_URL,DEFAULT_CURRENCY,DEFAULT_LOCATION_NAME,DEFAULT_ORGANIZATION_NAME,DEFAULT_TIMEZONE,BOOTSTRAP_OWNER_EMAILS,BOOTSTRAP_STAFF_EMAILS"
   # Turbopack's build cache stays on the build machine and is never
   # published. Real secrets still fail the build if they appear anywhere else.
-  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/cache/**,.next/cache/**"
+  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/cache,.netlify/.next/cache/**,.next/cache,.next/cache/**"
