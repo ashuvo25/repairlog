@@ -14,8 +14,10 @@ import {
 } from "@/lib/modules/billing/entitlement";
 import { hashBinding, syncSubscription } from "@/lib/modules/billing/sync";
 import {
+  cancelSubscription,
   createCheckout,
   getSubscription,
+  resumeSubscription,
 } from "@/lib/providers/lemonsqueezy/client";
 import {
   getLemonSqueezyConfig,
@@ -201,4 +203,54 @@ export async function refreshSubscription(): Promise<BillingActionState> {
       ? "Subscription status is up to date."
       : "Status refreshed.",
   };
+}
+
+async function changeAutoRenew(turnOn: boolean): Promise<BillingActionState> {
+  const membership = await requireOwner();
+
+  if (!isBillingConfigured()) {
+    return { error: NOT_CONFIGURED };
+  }
+
+  const current = await readCurrentSubscription(membership.organizationId);
+  if (!current) {
+    return { error: "This café does not have a subscription yet." };
+  }
+
+  if (turnOn ? current.status !== "cancelled" : !["active", "on_trial", "past_due"].includes(current.status)) {
+    return { error: "This subscription cannot be changed right now. Refresh and try again." };
+  }
+
+  try {
+    if (turnOn) {
+      await resumeSubscription(current.provider_subscription_id);
+    } else {
+      await cancelSubscription(current.provider_subscription_id);
+    }
+    // Read the provider's answer straight back so the page is correct now,
+    // without waiting for the webhook.
+    await syncSubscription(createAdminClient(), current.provider_subscription_id);
+  } catch (error) {
+    console.error("Auto-renew change failed", {
+      turnOn,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return { error: PROVIDER_DOWN };
+  }
+
+  revalidatePath("/settings/billing");
+  revalidatePath("/", "layout");
+  return {
+    success: turnOn
+      ? "Auto-renew is back on. Your plan will renew as normal."
+      : "Auto-renew is off. You keep full access until the end of the period you paid for.",
+  };
+}
+
+export async function turnOffAutoRenew(): Promise<BillingActionState> {
+  return changeAutoRenew(false);
+}
+
+export async function turnOnAutoRenew(): Promise<BillingActionState> {
+  return changeAutoRenew(true);
 }

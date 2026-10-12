@@ -86,7 +86,7 @@ export function ConditionForm({
       <input type="hidden" name="version" value={version} />
       <Field
         label="Verified condition"
-        hint="Record what you checked in person. Closing a ticket does not change this."
+        hint="Record what you checked in person. Confirming a repair sets it back to Operational."
       >
         <select
           name="condition"

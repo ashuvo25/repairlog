@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { cardClasses } from "@/components/ui/card";
 import { Logo } from "@/components/ui/logo";
+import { displayFont } from "@/lib/fonts";
 import { getAuthenticatedUser } from "@/lib/auth/session";
 import { isInvitationToken } from "@/lib/modules/team/errors";
 import { createClient } from "@/lib/supabase/server/client";
@@ -87,12 +88,12 @@ export default async function InvitationPage({
   const cafeName = preview.cafe_name ?? "your café";
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-8">
+    <main className={`${displayFont.variable} theme-bistro mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-8`}>
       <Logo />
       <div className="flex flex-1 flex-col justify-center py-10">
         {preview.status !== "valid" ? (
           <>
-            <h1 className="text-3xl font-semibold tracking-tight">
+            <h1 className="font-display text-3xl font-semibold tracking-tight">
               {CLOSED_MESSAGES[preview.status].title}
             </h1>
             <p className="mt-3 leading-7 text-muted">
@@ -105,7 +106,7 @@ export default async function InvitationPage({
         ) : (
           <>
             <p className="text-sm font-medium text-muted">Team invitation</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-balance">
+            <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight text-balance">
               Join {cafeName} on RepairLog
             </h1>
             <p className="mt-3 leading-7 text-muted">

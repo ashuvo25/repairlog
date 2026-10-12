@@ -23,9 +23,9 @@ export const metadata: Metadata = {
 const PAGE_SIZE = 100;
 
 const FILTERS = [
-  { key: "active", label: "Active" },
-  { key: "awaiting", label: "Awaiting verification" },
-  { key: "resolved", label: "Resolved" },
+  { key: "active", label: "Not fixed yet" },
+  { key: "awaiting", label: "Waiting for owner check" },
+  { key: "resolved", label: "Fixed" },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]["key"];

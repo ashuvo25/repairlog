@@ -58,7 +58,7 @@ function NotInvited({ email }: Readonly<{ email: string | null }>) {
             not linked to a café.{" "}
           </>
         ) : null}
-        RepairLog is open to invited pilot cafés.
+        If you are joining a café team, use the invitation link from the owner.
       </p>
       <ul className="mt-6 space-y-3 text-sm leading-6">
         <li className={`${cardClasses} p-4`}>
@@ -102,8 +102,8 @@ export default async function OnboardingPage() {
           Create your café
         </h1>
         <p className="mt-3 text-lg leading-8 text-muted">
-          Set up your workspace in about a minute. You will be the owner and
-          can add equipment straight away.
+          Set up your workspace in about a minute. Your 15-day free trial
+          starts today, with no card needed.
         </p>
       </div>
 

@@ -41,7 +41,13 @@ export type MenuImpactItem = {
   alternative: string | null;
   updatedAt: string;
   status: MenuItemStatus;
-  equipment: { id: string; name: string; condition: EquipmentCondition | null }[];
+  equipment: {
+    id: string;
+    name: string;
+    condition: EquipmentCondition | null;
+    // Tickets not yet fixed for this machine.
+    openFaults: number;
+  }[];
 };
 
 // Loads every active menu item with its linked machines and derived status.
@@ -49,7 +55,7 @@ export async function loadMenuImpact(
   supabase: SupabaseClient,
   organizationId: string,
 ): Promise<MenuImpactItem[]> {
-  const [itemsResult, dependenciesResult, equipmentResult] = await Promise.all([
+  const [itemsResult, dependenciesResult, equipmentResult, ticketsResult] = await Promise.all([
     supabase
       .from("menu_items")
       .select("id, name, approved_alternative, updated_at")
@@ -63,7 +69,17 @@ export async function loadMenuImpact(
       .from("equipment")
       .select("id, name, condition, archived_at")
       .eq("organization_id", organizationId),
+    supabase
+      .from("tickets")
+      .select("equipment_id")
+      .eq("organization_id", organizationId)
+      .neq("status", "resolved"),
   ]);
+
+  const openFaults = new Map<string, number>();
+  for (const ticket of (ticketsResult.data ?? []) as { equipment_id: string }[]) {
+    openFaults.set(ticket.equipment_id, (openFaults.get(ticket.equipment_id) ?? 0) + 1);
+  }
 
   if (itemsResult.error || dependenciesResult.error || equipmentResult.error) {
     throw new Error("Unable to load menu impact.");
@@ -106,6 +122,7 @@ export async function loadMenuImpact(
           name: machine?.name ?? "Removed machine",
           // An archived machine has no verified condition any more.
           condition: machine && !machine.archived_at ? machine.condition : null,
+          openFaults: openFaults.get(equipmentId) ?? 0,
         };
       });
 

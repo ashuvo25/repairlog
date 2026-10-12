@@ -58,12 +58,17 @@ export function InviteForm({ timezone }: Readonly<{ timezone: string }>) {
           className="rounded-lg border border-primary-border bg-primary-soft p-4"
         >
           <p className="text-sm font-semibold text-primary">
-            Invitation ready for {state.invite.email}
+            {state.invite.emailed
+              ? `Invitation emailed to ${state.invite.email}`
+              : `Invitation ready for ${state.invite.email}`}
           </p>
           <p className="mt-1 text-sm leading-6 text-foreground">
-            Send them this link. It works once, only for that Google account,
-            until {formatDate(state.invite.expiresAt, timezone)}. It will not
-            be shown again.
+            {state.invite.emailed
+              ? "They can also use this link if the email doesn't arrive."
+              : "We couldn't email it, so send them this link yourself."}{" "}
+            It works once, only for that Google account, until{" "}
+            {formatDate(state.invite.expiresAt, timezone)}. It will not be shown
+            again.
           </p>
           <p className="mt-3 break-all rounded-md border border-primary-border bg-white px-3 py-2 font-mono text-xs">
             {state.invite.url}

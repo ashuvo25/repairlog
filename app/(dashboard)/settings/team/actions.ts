@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { getAppUrl } from "@/lib/auth/app-url";
+import { requireAuthenticatedUser } from "@/lib/auth/session";
+import { sendEmail } from "@/lib/email/send";
+import { invitationEmail } from "@/lib/email/templates";
+import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/modules/equipment/validation";
 import {
   isEmail,
@@ -14,7 +18,7 @@ import { createClient } from "@/lib/supabase/server/client";
 
 export type InviteState = {
   error?: string;
-  invite?: { email: string; url: string; expiresAt: string };
+  invite?: { email: string; url: string; expiresAt: string; emailed: boolean };
 };
 
 export type TeamActionState = {
@@ -57,14 +61,35 @@ export async function inviteStaff(
     return { error: "The invitation was created but its link was not returned." };
   }
 
+  const url = new URL(`/invitation/${token}`, getAppUrl()).toString();
+
+  // Email the link as well. If sending fails, the owner still has the link
+  // to share by hand, so the invitation itself is never lost.
+  const [{ data: organization }, owner] = await Promise.all([
+    supabase
+      .from("organizations")
+      .select("name, timezone")
+      .eq("id", membership.organizationId)
+      .single(),
+    requireAuthenticatedUser(),
+  ]);
+  const sent = await sendEmail(
+    email,
+    invitationEmail({
+      cafeName: organization?.name ?? "your café",
+      inviterEmail: owner.email,
+      inviteUrl: url,
+      inviteeEmail: email,
+      expiresOn: formatDate(expiresAt, organization?.timezone ?? "UTC"),
+    }),
+  );
+
+  if (!sent.ok) {
+    console.error("Invitation email not sent", { reason: sent.error });
+  }
+
   revalidatePath("/settings/team");
-  return {
-    invite: {
-      email,
-      url: new URL(`/invitation/${token}`, getAppUrl()).toString(),
-      expiresAt,
-    },
-  };
+  return { invite: { email, url, expiresAt, emailed: sent.ok } };
 }
 
 export async function revokeInvitation(

@@ -4,13 +4,66 @@ import { BottomNav, SidebarNav } from "@/components/layout/app-nav";
 import { LogOutIcon } from "@/components/ui/icons";
 import { Logo } from "@/components/ui/logo";
 import { requireAuthenticatedUser } from "@/lib/auth/session";
+import { loadCafeAccess, type CafeAccess } from "@/lib/modules/billing/access";
 import { displayFont } from "@/lib/fonts";
 import { getCurrentMembership } from "@/lib/permissions/current-membership";
+import { createAdminClient } from "@/lib/supabase/admin/client";
 import { createClient } from "@/lib/supabase/server/client";
 
 import { resetTips } from "./help-actions";
 
 export const dynamic = "force-dynamic";
+
+// Trial and plan status for everyone in the café. Read with the server's
+// admin client because staff cannot read billing records themselves.
+function PlanBanner({
+  access,
+  isOwner,
+}: Readonly<{ access: CafeAccess | null; isOwner: boolean }>) {
+  if (!access || access.state === "subscribed") {
+    return null;
+  }
+
+  if (access.state === "trial") {
+    if (!isOwner) {
+      return null;
+    }
+
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border bg-subtle px-4 py-2 text-sm sm:px-8 print:hidden">
+        <span>
+          <span className="font-semibold">Free trial:</span>{" "}
+          {access.daysLeft === 1 ? "last day" : `${access.daysLeft} days left`}.
+        </span>
+        <Link href="/settings/billing" className="font-semibold text-primary underline underline-offset-4">
+          Choose a plan
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="status"
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-attention-border bg-attention-soft px-4 py-3 text-sm text-attention sm:px-8 print:hidden"
+    >
+      <span>
+        <span className="font-semibold">Your free trial has ended.</span>{" "}
+        {isOwner
+          ? "Customers can't report faults by QR code until you choose a plan. Everything else keeps working."
+          : "QR code reporting is paused. Please ask the café owner to choose a plan."}
+      </span>
+      {isOwner ? (
+        <Link
+          href="/settings/billing"
+          className="inline-flex min-h-9 items-center rounded-md bg-primary px-3 font-semibold text-white hover:bg-primary-hover"
+        >
+          Choose a plan
+        </Link>
+      ) : null}
+    </div>
+  );
+}
 
 function SignOutButton({ compact = false }: Readonly<{ compact?: boolean }>) {
   return (
@@ -40,6 +93,7 @@ export default async function DashboardLayout({
 
   let cafeName = "Your café";
   let pendingReports = 0;
+  let access: CafeAccess | null = null;
 
   if (membership) {
     const supabase = await createClient();
@@ -59,6 +113,9 @@ export default async function DashboardLayout({
     ]);
     cafeName = organizationResult.data?.name ?? cafeName;
     pendingReports = reportsResult.count ?? 0;
+    access = await loadCafeAccess(createAdminClient(), membership.organizationId).catch(
+      () => null,
+    );
   }
 
   const shellClasses = `${displayFont.variable} theme-bistro min-h-screen`;
@@ -124,6 +181,7 @@ export default async function DashboardLayout({
             <SignOutButton compact />
           </div>
         </header>
+        <PlanBanner access={access} isOwner={isOwner} />
         <div className="flex-1">{children}</div>
       </div>
 

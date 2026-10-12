@@ -374,7 +374,7 @@ export default async function HomePage() {
             <div>
               <Eyebrow>Menu impact</Eyebrow>
               <DisplayHeading className="mt-3">
-                Know what&apos;s 86&apos;d before the rush.
+                Know what&apos;s off the menu before the rush.
               </DisplayHeading>
               <p className="mt-4 max-w-md text-lg leading-8 text-muted">
                 Link each menu item to the machines it needs. When the owner
@@ -401,7 +401,7 @@ export default async function HomePage() {
                             : "bg-[#9c3d30] text-white"
                         }`}
                       >
-                        {available ? "Available" : "86'd"}
+                        {available ? "Available" : "Not available"}
                       </span>
                     </div>
                     {note ? (
@@ -546,7 +546,7 @@ export default async function HomePage() {
                 </>
               ) : (
                 <p className="font-display text-xl italic">
-                  Pricing is shared during pilot onboarding.
+                  Start with a 15-day free trial.
                 </p>
               )}
               <Link href="/pricing" className={`mt-7 w-full ${PILL_PRIMARY}`}>
@@ -615,7 +615,7 @@ export default async function HomePage() {
               </Link>
             </div>
             <p className="mt-6 text-sm text-[#d9c9b4]">
-              Currently open to invited pilot cafés.
+              15-day free trial. No card needed.
             </p>
           </div>
         </section>

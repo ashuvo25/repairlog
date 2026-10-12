@@ -24,9 +24,11 @@ export default function TermsPage() {
       </section>
 
       <section>
-        <h2>Pilot status</h2>
+        <h2>Free trial and early access</h2>
         <p>
-          RepairLog is currently offered to invited pilot cafés. Features may
+          Every café starts with a 15-day free trial. When it ends without a
+          paid plan, public QR reporting pauses until a plan is chosen; your
+          records stay available. RepairLog is in early access. Features may
           change, and we may limit the number of cafés, staff or photos to
           keep the service reliable.
         </p>

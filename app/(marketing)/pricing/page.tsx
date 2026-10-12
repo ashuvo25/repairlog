@@ -101,7 +101,7 @@ export default async function PricingPage() {
               <p className="mt-2 text-sm text-muted">
                 {price.hasFreeTrial && price.trialDays
                   ? `${price.trialDays}-day free trial included.`
-                  : "Billed in US dollars. Taxes may apply."}
+                  : "After your 15-day free trial. Billed in US dollars."}
               </p>
               <Link
                 href="/sign-in?next=/settings/billing"
@@ -114,7 +114,7 @@ export default async function PricingPage() {
         </div>
       ) : (
         <p className="mx-auto mt-12 max-w-xl rounded-xl border border-border bg-surface px-6 py-5 text-center leading-7 text-muted">
-          RepairLog is in an invited pilot. Pricing is shared during onboarding.
+          Start with a 15-day free trial. Pricing appears here shortly.
         </p>
       )}
 
@@ -129,7 +129,7 @@ export default async function PricingPage() {
           ))}
         </ul>
         <p className="mt-5 border-t border-border pt-4 text-sm leading-6 text-muted">
-          Access is currently limited to invited pilot cafés. Payments are
+          Every café starts with a 15-day free trial, no card needed. Payments are
           processed by Lemon Squeezy, our merchant of record; RepairLog never
           sees your card details.
         </p>

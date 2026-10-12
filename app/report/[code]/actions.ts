@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 
+import { loadAccessForReportCode } from "@/lib/modules/billing/access";
 import { isUuid } from "@/lib/modules/equipment/validation";
 import {
   getReporterFingerprint,
@@ -52,6 +53,17 @@ export async function submitPublicReport(
   }
 
   const admin = createAdminClient();
+  const access = await loadAccessForReportCode(admin, code);
+  if (!access) {
+    return { error: "This QR code is no longer active. Please tell a member of staff." };
+  }
+  if (access.state === "expired") {
+    return {
+      error:
+        "Online reporting is not available here right now. Please tell a member of staff or contact the shop owner.",
+    };
+  }
+
   const { data, error } = await admin.rpc("submit_public_report", {
     p_public_report_code: code,
     p_request_id: requestId,

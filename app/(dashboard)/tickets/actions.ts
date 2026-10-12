@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  readConditionChoice,
+  setEquipmentConditionFor,
+} from "@/lib/modules/equipment/mark-unavailable";
+import {
   isUuid,
   parseVersion,
 } from "@/lib/modules/equipment/validation";
@@ -11,6 +15,7 @@ import {
   isTicketPriority,
   isTicketStatus,
   parseAmountToMinor,
+  todayInTimezone,
 } from "@/lib/modules/tickets/constants";
 import {
   requireMembership,
@@ -102,6 +107,15 @@ export async function createTicket(
   const ticketId = typeof data === "string" ? data : "";
   if (!isUuid(ticketId)) {
     return { error: "The ticket was created but could not be opened." };
+  }
+
+  // Only an owner may confirm a machine is down; staff tickets leave the
+  // condition for the owner to check.
+  const newCondition = readConditionChoice(formData.get("condition"));
+  if (membership.role === "owner" && newCondition) {
+    await setEquipmentConditionFor(supabase, membership.organizationId, equipmentId, newCondition);
+    revalidatePath("/menu-impact");
+    revalidatePath("/equipment");
   }
 
   revalidateTicket(ticketId);
@@ -225,4 +239,120 @@ export async function addRepairUpdate(
 
   revalidateTicket(ticketId);
   return { success: "Repair work recorded." };
+}
+
+// The owner's final step: confirm the repair, and optionally record in the
+// same click that the machine is working again.
+export async function confirmFixed(
+  _state: TicketActionState,
+  formData: FormData,
+): Promise<TicketActionState> {
+  const membership = await requireOwner();
+  const ticketId = formData.get("ticketId")?.toString() ?? "";
+  const version = parseVersion(formData.get("version"));
+  const requestId = formData.get("requestId")?.toString() ?? "";
+  const cost = parseAmountToMinor(formData.get("cost")?.toString() ?? "");
+  const note = formData.get("workNote")?.toString().trim() ?? "";
+
+  if (!isUuid(ticketId) || version === null || !isUuid(requestId)) {
+    return { error: "The request is invalid. Refresh and try again." };
+  }
+
+  // The repair cost is required to close a ticket; 0 means it was free.
+  if (cost === null || cost === undefined) {
+    return { error: "Enter the repair cost, such as 45 or 45.50. Enter 0 if it was free." };
+  }
+
+  if (note.length > 4000) {
+    return { error: "Keep the note under 4000 characters." };
+  }
+
+  const supabase = await createClient();
+  const { data: ticketRow } = await supabase
+    .from("organizations")
+    .select("timezone")
+    .eq("id", membership.organizationId)
+    .single();
+  const { error: costError } = await supabase.rpc("add_repair_update", {
+    p_organization_id: membership.organizationId,
+    p_ticket_id: ticketId,
+    p_request_id: requestId,
+    p_technician_name: "",
+    p_work_note: note || "Repair checked and confirmed by the owner.",
+    p_work_date: todayInTimezone(ticketRow?.timezone ?? "UTC"),
+    p_cost_minor: cost,
+  });
+
+  if (costError) {
+    return {
+      error: mapError("add_repair_update", costError, "We could not save the repair cost."),
+    };
+  }
+
+  const { error } = await supabase.rpc("set_ticket_status", {
+    p_organization_id: membership.organizationId,
+    p_ticket_id: ticketId,
+    p_expected_version: version,
+    p_status: "resolved",
+  });
+
+  if (error) {
+    return { error: mapError("set_ticket_status", error, "We could not close the ticket.") };
+  }
+
+  {
+    const { data: ticket } = await supabase
+      .from("tickets")
+      .select("equipment_id")
+      .eq("organization_id", membership.organizationId)
+      .eq("id", ticketId)
+      .single();
+    const { data: equipment } = ticket
+      ? await supabase
+          .from("equipment")
+          .select("id, version, condition, archived_at")
+          .eq("organization_id", membership.organizationId)
+          .eq("id", ticket.equipment_id)
+          .single()
+      : { data: null };
+
+    // Another unfixed ticket on the same machine keeps it Unavailable.
+    const { count: otherOpen } = ticket
+      ? await supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", membership.organizationId)
+          .eq("equipment_id", ticket.equipment_id)
+          .neq("status", "resolved")
+      : { count: 0 };
+
+    if (
+      equipment &&
+      !equipment.archived_at &&
+      equipment.condition !== "operational" &&
+      (otherOpen ?? 0) === 0
+    ) {
+      const { error: conditionError } = await supabase.rpc("set_equipment_condition", {
+        p_organization_id: membership.organizationId,
+        p_equipment_id: equipment.id,
+        p_expected_version: equipment.version,
+        p_condition: "operational",
+      });
+
+      if (conditionError) {
+        revalidateTicket(ticketId);
+        return {
+          error:
+            "The ticket is fixed, but the machine's condition could not be updated. Change it on the equipment page.",
+        };
+      }
+
+      revalidatePath(`/equipment/${equipment.id}`);
+      revalidatePath("/equipment");
+      revalidatePath("/menu-impact");
+    }
+  }
+
+  revalidateTicket(ticketId);
+  return {};
 }

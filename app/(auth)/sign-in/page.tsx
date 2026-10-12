@@ -43,7 +43,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             Welcome back.
           </h1>
           <p className="mt-4 text-lg leading-8 text-muted">
-            Sign in with the Google account your café invited.
+            Sign in with Google. New here? Your café gets a 15-day free trial.
           </p>
 
           {params.error ? (

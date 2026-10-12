@@ -39,7 +39,8 @@ database/
 |-- 970_public_reports.sql
 |-- 980_tickets_module.sql
 |-- 990_menu_impact.sql
-`-- 995_first_use_tips.sql
+|-- 995_first_use_tips.sql
+`-- 1000_open_signup.sql
 ```
 
 ## Rules represented here

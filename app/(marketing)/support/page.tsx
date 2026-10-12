@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 const LIMITS = [
-  "RepairLog is in an invited pilot; access is granted café by café.",
+  "Every café starts with a 15-day free trial. After it ends, QR reporting pauses until a plan is chosen.",
   "One location per café and up to 10 staff members.",
   "Up to two photos per report, stored at most 1 MB each.",
   "Reports from QR codes are rate-limited to stop spam.",
@@ -60,8 +60,7 @@ export default function SupportPage() {
           </p>
         ) : (
           <p className="mt-2 leading-7 text-muted">
-            Pilot cafés can reach the RepairLog team through their onboarding
-            contact.
+            Our support email will be published here shortly.
           </p>
         )}
         <p className="mt-3 text-sm leading-6 text-muted">

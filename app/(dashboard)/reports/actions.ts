@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  readConditionChoice,
+  setEquipmentConditionFor,
+} from "@/lib/modules/equipment/mark-unavailable";
 import { isUuid } from "@/lib/modules/equipment/validation";
 import { mapTeamError } from "@/lib/modules/team/errors";
 import { requireOwner } from "@/lib/permissions/current-membership";
@@ -26,6 +30,8 @@ export async function acceptReport(
   const membership = await requireOwner();
   const reportId = formData.get("reportId")?.toString() ?? "";
   const priority = formData.get("priority")?.toString() ?? "";
+  // "keep" (or nothing) leaves the machine as it is.
+  const newCondition = readConditionChoice(formData.get("condition"));
 
   if (
     !isUuid(reportId) ||
@@ -49,6 +55,37 @@ export async function acceptReport(
         "We could not accept this report.",
       ),
     };
+  }
+
+  if (newCondition) {
+    const { data: report } = await supabase
+      .from("public_reports")
+      .select("equipment_id")
+      .eq("organization_id", membership.organizationId)
+      .eq("id", reportId)
+      .single();
+
+    const marked = report
+      ? await setEquipmentConditionFor(
+          supabase,
+          membership.organizationId,
+          report.equipment_id,
+          newCondition,
+        )
+      : false;
+
+    revalidateReports();
+    revalidatePath("/menu-impact");
+    revalidatePath("/equipment");
+
+    if (!marked) {
+      return {
+        error:
+          "The ticket was created, but the machine condition could not be changed. Change it on the equipment page.",
+      };
+    }
+
+    return {};
   }
 
   revalidateReports();

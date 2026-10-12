@@ -65,6 +65,8 @@ function readEquipmentFields(formData: FormData) {
 function revalidateEquipment(equipmentId?: string) {
   revalidatePath("/equipment");
   revalidatePath("/today");
+  revalidatePath("/menu-impact");
+  revalidatePath("/tickets/[ticketId]", "page");
 
   if (equipmentId) {
     revalidatePath(`/equipment/${equipmentId}`);

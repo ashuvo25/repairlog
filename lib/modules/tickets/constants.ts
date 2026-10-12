@@ -14,10 +14,10 @@ export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
 type Tone = "positive" | "attention" | "danger" | "neutral";
 
 export const STATUS_LABELS: Record<TicketStatus, { label: string; tone: Tone }> = {
-  open: { label: "Open", tone: "danger" },
-  in_progress: { label: "In progress", tone: "attention" },
-  awaiting_verification: { label: "Awaiting verification", tone: "attention" },
-  resolved: { label: "Resolved", tone: "positive" },
+  open: { label: "Reported", tone: "danger" },
+  in_progress: { label: "Being repaired", tone: "attention" },
+  awaiting_verification: { label: "Owner check", tone: "attention" },
+  resolved: { label: "Fixed", tone: "positive" },
 };
 
 export const PRIORITY_LABELS: Record<TicketPriority, { label: string; tone: Tone }> = {

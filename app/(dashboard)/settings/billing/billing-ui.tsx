@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/ui/form-message";
@@ -10,6 +10,8 @@ import {
   openBillingPortal,
   refreshSubscription,
   startCheckout,
+  turnOffAutoRenew,
+  turnOnAutoRenew,
   type BillingActionState,
 } from "./actions";
 
@@ -116,6 +118,69 @@ export function CheckoutPending() {
           ? "Thanks. We are confirming the payment with the provider. This usually takes under a minute."
           : "The payment provider has not confirmed the payment yet. If you were charged, it will appear here shortly; reload this page in a few minutes."}
       </p>
+    </div>
+  );
+}
+
+// Stopping auto-renew asks for confirmation; turning it back on does not.
+export function AutoRenewControl({
+  autoRenewOn,
+  accessUntil,
+}: Readonly<{ autoRenewOn: boolean; accessUntil: string | null }>) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [offState, turnOff, turningOff] = useActionState(turnOffAutoRenew, initialState);
+  const [onState, turnOn, turningOn] = useActionState(turnOnAutoRenew, initialState);
+
+  if (!autoRenewOn) {
+    return (
+      <form action={turnOn} className="space-y-3">
+        <Button type="submit" disabled={turningOn}>
+          {turningOn ? "Turning on…" : "Turn auto-renew back on"}
+        </Button>
+        <Messages state={onState} />
+      </form>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <Button variant="secondary" onClick={() => dialogRef.current?.showModal()}>
+        Turn off auto-renew
+      </Button>
+      <Messages state={offState} />
+
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="auto-renew-title"
+        className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-xl border border-border bg-surface p-6 text-foreground shadow-xl backdrop:bg-foreground/40"
+      >
+        <h3 id="auto-renew-title" className="font-display text-xl font-semibold">
+          Turn off auto-renew?
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          You won&apos;t be charged again.
+          {accessUntil
+            ? ` Everything keeps working until ${accessUntil}.`
+            : " Everything keeps working until the end of the period you paid for."}{" "}
+          After that, customers can&apos;t report faults by QR code until you
+          choose a plan again. You can turn auto-renew back on any time before
+          then.
+        </p>
+        <form
+          action={() => {
+            dialogRef.current?.close();
+            turnOff();
+          }}
+          className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+        >
+          <Button variant="secondary" onClick={() => dialogRef.current?.close()}>
+            Keep auto-renew
+          </Button>
+          <Button type="submit" variant="danger" disabled={turningOff}>
+            {turningOff ? "Turning off…" : "Turn off auto-renew"}
+          </Button>
+        </form>
+      </dialog>
     </div>
   );
 }

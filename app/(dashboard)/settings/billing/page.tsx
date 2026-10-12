@@ -5,6 +5,7 @@ import { Card, cardClasses } from "@/components/ui/card";
 import { FormMessage } from "@/components/ui/form-message";
 import { CheckIcon } from "@/components/ui/icons";
 import { formatDate } from "@/lib/format";
+import { computeCafeAccess, TRIAL_DAYS } from "@/lib/modules/billing/access";
 import {
   getEntitlement,
   pickCurrentSubscription,
@@ -26,6 +27,7 @@ import { createClient } from "@/lib/supabase/server/client";
 
 import {
   CheckoutPending,
+  AutoRenewControl,
   ManageBillingButton,
   RefreshStatusButton,
   SubscribeButton,
@@ -66,6 +68,10 @@ const INCLUDED = [
   "A printable QR label for every machine",
   "Owner-confirmed equipment condition",
 ] as const;
+
+function isInFuture(value: string) {
+  return new Date(value).getTime() > Date.now();
+}
 
 function formatPrice(minor: number) {
   return new Intl.NumberFormat("en-US", {
@@ -166,7 +172,7 @@ export default async function BillingSettingsPage({
   const [organizationResult, subscriptionsResult] = await Promise.all([
     supabase
       .from("organizations")
-      .select("timezone")
+      .select("timezone, created_at")
       .eq("id", membership.organizationId)
       .single(),
     supabase
@@ -187,6 +193,36 @@ export default async function BillingSettingsPage({
     (subscriptionsResult.data ?? []) as SubscriptionRow[],
   );
   const canSubscribe = !subscription || subscription.status === "expired";
+  const access = organizationResult.data?.created_at
+    ? computeCafeAccess(
+        organizationResult.data.created_at as string,
+        (subscriptionsResult.data ?? []) as SubscriptionRow[],
+      )
+    : null;
+  const trialNotice =
+    access?.state === "trial" ? (
+      <Card title={`Free trial: ${access.daysLeft === 1 ? "last day" : `${access.daysLeft} days left`}`}>
+        <p className="leading-7 text-muted">
+          Every café gets {TRIAL_DAYS} days free with everything included. Your
+          trial ends on {formatDate(access.trialEndsAt, timezone)}. Choose a
+          plan any time; you are only charged once you subscribe.
+        </p>
+      </Card>
+    ) : access?.state === "expired" ? (
+      <div
+        role="status"
+        className="rounded-lg border border-attention-border bg-attention-soft px-5 py-4 text-attention"
+      >
+        <p className="font-semibold">
+          Your free trial ended on {formatDate(access.trialEndedAt, timezone)}.
+        </p>
+        <p className="mt-1 text-sm leading-6">
+          Customers can&apos;t report faults by QR code until you choose a
+          plan. Your team can keep using everything else.
+        </p>
+      </div>
+    ) : null;
+
   const testModeNotice = config.testMode ? (
     <p className="rounded-lg border border-border bg-subtle px-4 py-3 text-sm leading-6 text-muted">
       <span className="font-semibold text-foreground">Test mode.</span> No real
@@ -210,6 +246,8 @@ export default async function BillingSettingsPage({
   return (
     <div className="space-y-6">
       {testModeNotice}
+
+      {trialNotice}
 
       {subscription ? (
         <Card title="Subscription">
@@ -244,6 +282,24 @@ export default async function BillingSettingsPage({
           ) : null}
           <div className="mt-5 flex flex-wrap items-start gap-3">
             <ManageBillingButton />
+            {["active", "on_trial", "past_due"].includes(subscription.status) ? (
+              <AutoRenewControl
+                autoRenewOn
+                accessUntil={
+                  subscription.renews_at
+                    ? formatDate(subscription.renews_at, timezone)
+                    : null
+                }
+              />
+            ) : null}
+            {subscription.status === "cancelled" &&
+            subscription.ends_at &&
+            isInFuture(subscription.ends_at) ? (
+              <AutoRenewControl
+                autoRenewOn={false}
+                accessUntil={formatDate(subscription.ends_at, timezone)}
+              />
+            ) : null}
             <RefreshStatusButton />
           </div>
           <p className="mt-4 border-t border-border pt-4 text-sm leading-6 text-muted">

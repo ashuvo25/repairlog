@@ -15,9 +15,11 @@ const MAX_LENGTH = 4000;
 export function NewTicketForm({
   equipment,
   selectedEquipmentId,
+  isOwner,
 }: Readonly<{
   equipment: readonly { id: string; name: string; category: string }[];
   selectedEquipmentId: string | null;
+  isOwner: boolean;
 }>) {
   const [requestId] = useState(() => crypto.randomUUID());
   const [equipmentId, setEquipmentId] = useState(selectedEquipmentId ?? "");
@@ -78,9 +80,26 @@ export function NewTicketForm({
         </select>
       </Field>
 
+      {isOwner ? (
+        <Field
+          label="Machine condition"
+          hint="Choose Unavailable if the machine can't be used; menu items that need it show as affected."
+        >
+          <select name="condition" defaultValue="keep" className={inputClasses}>
+            <option value="keep">Keep as it is</option>
+            <option value="unavailable">Unavailable: not working</option>
+            <option value="operational">Operational: still works</option>
+            <option value="unknown">Unknown: needs checking</option>
+          </select>
+        </Field>
+      ) : null}
+
       <p className="rounded-lg bg-subtle px-4 py-3 text-sm leading-6 text-muted">
-        You can add up to two photos on the next screen.
+        {isOwner
+          ? "You can add up to two photos on the next screen."
+          : "The owner decides whether the machine is out of service. You can add up to two photos on the next screen."}
       </p>
+
 
       {state.error ? <FormMessage tone="error">{state.error}</FormMessage> : null}
 

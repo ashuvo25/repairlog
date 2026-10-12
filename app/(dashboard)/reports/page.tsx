@@ -88,7 +88,7 @@ export default async function ReportsPage() {
     equipmentIds.length
       ? supabase
           .from("equipment")
-          .select("id, name")
+          .select("id, name, condition")
           .eq("organization_id", membership.organizationId)
           .in("id", equipmentIds)
       : Promise.resolve({ data: [] }),
@@ -102,6 +102,11 @@ export default async function ReportsPage() {
       : Promise.resolve({ data: [] }),
   ]);
 
+  const equipmentConditions = new Map(
+    ((equipmentResult.data ?? []) as { id: string; condition: "operational" | "unavailable" | "unknown" }[]).map(
+      (item) => [item.id, item.condition],
+    ),
+  );
   const equipmentNames = new Map(
     ((equipmentResult.data ?? []) as { id: string; name: string }[]).map(
       (item) => [item.id, item.name],
@@ -180,7 +185,11 @@ export default async function ReportsPage() {
                   </div>
                 ) : null}
                 <div className="mt-5 border-t border-border pt-4">
-                  <ReviewActions reportId={report.id} />
+                  <ReviewActions
+                    reportId={report.id}
+                    equipmentName={equipmentNames.get(report.equipment_id) ?? "This machine"}
+                    currentCondition={equipmentConditions.get(report.equipment_id) ?? "unknown"}
+                  />
                 </div>
               </li>
             ))}

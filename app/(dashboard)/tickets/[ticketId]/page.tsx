@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackLink, PageHeader } from "@/components/layout/page-header";
-import { Tip } from "@/components/onboarding/tip";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
@@ -20,7 +19,8 @@ import { requireMembership } from "@/lib/permissions/current-membership";
 import { createClient } from "@/lib/supabase/server/client";
 
 import { TicketPhotoUpload } from "../photo-upload";
-import { RepairUpdateForm, StatusActions } from "../ticket-management";
+import { ConditionForm } from "../../equipment/equipment-management";
+import { RepairSteps, RepairUpdateForm } from "../ticket-management";
 
 export const metadata: Metadata = {
   title: "Ticket",
@@ -90,7 +90,7 @@ export default async function TicketDetailPage({
         .single(),
       supabase
         .from("equipment")
-        .select("name")
+        .select("id, name, condition, version, archived_at")
         .eq("organization_id", membership.organizationId)
         .eq("id", ticket.equipment_id)
         .maybeSingle(),
@@ -140,7 +140,7 @@ export default async function TicketDetailPage({
 
       <div className="mt-4">
         <PageHeader
-          eyebrow={`Reported ${formatDate(ticket.created_at, timezone)}`}
+          eyebrow={`Ticket · reported ${formatDate(ticket.created_at, timezone)}`}
           title={equipmentName}
           actions={
             <>
@@ -155,16 +155,47 @@ export default async function TicketDetailPage({
         />
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-start">
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-start">
+        {/* Left: where the repair is and what to do next */}
+        <div className="space-y-6 lg:sticky lg:top-6">
+          <Card title="Repair progress" description="Follow the steps in order. The current step shows what to do next.">
+            <RepairSteps
+              ticketId={ticket.id}
+              version={ticket.version}
+              status={ticket.status}
+              isOwner={isOwner}
+              reportedOn={formatDate(ticket.created_at, timezone)}
+              fixedOn={ticket.resolved_at ? formatDate(ticket.resolved_at, timezone) : null}
+              workCount={updates.length}
+              equipmentName={equipmentName}
+              machineAlreadyOperational={equipmentResult.data?.condition === "operational"}
+              currency={currency}
+              costSoFar={totalCost > 0 ? formatMoney(totalCost, currency) : null}
+            />
+          </Card>
+
+          {isOwner && equipmentResult.data && !equipmentResult.data.archived_at ? (
+            <Card
+              title="Machine condition"
+              description="Is the machine usable right now? This decides what shows as affected on the menu. It switches back to Operational automatically when the repair is confirmed."
+            >
+              <ConditionForm
+                equipmentId={equipmentResult.data.id}
+                version={equipmentResult.data.version}
+                condition={equipmentResult.data.condition}
+              />
+            </Card>
+          ) : null}
+
+        </div>
+
+        {/* Right: the problem and the work log */}
         <div className="space-y-6">
-          <Card title="Problem">
-            <p className="leading-7 break-words whitespace-pre-wrap">
-              {ticket.description}
-            </p>
+          <Card title="The problem">
+            <p className="leading-7 break-words whitespace-pre-wrap">{ticket.description}</p>
             {ticket.reopened_reason && ticket.status !== "resolved" ? (
               <p className="mt-4 rounded-lg border border-attention-border bg-attention-soft px-4 py-3 text-sm leading-6 text-attention">
-                <span className="font-semibold">Reopened:</span>{" "}
-                {ticket.reopened_reason}
+                <span className="font-semibold">Reopened:</span> {ticket.reopened_reason}
               </p>
             ) : null}
             {photoUrls.length ? (
@@ -183,7 +214,7 @@ export default async function TicketDetailPage({
                       src={url}
                       alt={`Photo ${index + 1} of the problem`}
                       loading="lazy"
-                      className="size-28 object-cover sm:size-40"
+                      className="size-28 object-cover sm:size-36"
                     />
                   </a>
                 ))}
@@ -191,10 +222,7 @@ export default async function TicketDetailPage({
             ) : null}
             {ticket.status !== "resolved" && photoPaths.length < 2 ? (
               <div className="mt-5">
-                <TicketPhotoUpload
-                  ticketId={ticket.id}
-                  remaining={2 - photoPaths.length}
-                />
+                <TicketPhotoUpload ticketId={ticket.id} remaining={2 - photoPaths.length} />
               </div>
             ) : null}
             <p className="mt-5 border-t border-border pt-4 text-sm">
@@ -202,80 +230,50 @@ export default async function TicketDetailPage({
                 href={`/equipment/${ticket.equipment_id}`}
                 className="font-semibold text-primary hover:underline"
               >
-                View {equipmentName}
+                Open {equipmentName}
               </Link>
             </p>
           </Card>
 
-          <Card
-            title="Repair history"
-            description="Work recorded on this ticket, newest first."
-          >
+          <Card title="Work log" description="What was done, by whom and when. Newest first.">
+            {isOwner && ticket.status !== "resolved" ? (
+              <div className="mb-6 rounded-lg border border-border bg-subtle p-4">
+                <RepairUpdateForm
+                  // A fresh form (and request ID) after every saved entry.
+                  key={updates.length}
+                  ticketId={ticket.id}
+                  today={todayInTimezone(timezone)}
+                  currency={currency}
+                />
+              </div>
+            ) : null}
+
             {updates.length ? (
               <ol className="space-y-5">
                 {updates.map((update) => (
-                  <li
-                    key={update.update_id}
-                    className="border-l-2 border-primary-border pl-4"
-                  >
+                  <li key={update.update_id} className="border-l-2 border-success-border pl-4">
                     <p className="text-sm font-semibold">
                       {formatDate(`${update.work_date}T12:00:00Z`, "UTC")}
                       {update.technician_name ? (
-                        <span className="font-normal text-muted">
-                          {" "}
-                          · {update.technician_name}
-                        </span>
+                        <span className="font-normal text-muted"> · {update.technician_name}</span>
                       ) : null}
                     </p>
                     <p className="mt-1 leading-7 break-words whitespace-pre-wrap">
                       {update.work_note}
                     </p>
-                    <p className="mt-1 text-xs text-muted">
-                      Recorded by {update.recorded_by_email}
-                    </p>
+                    <p className="mt-1 text-xs text-muted">Recorded by {update.recorded_by_email}</p>
                   </li>
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg bg-subtle px-4 py-6 text-center text-sm leading-6 text-muted">
-                No repair work recorded yet.
+              <p className="text-sm leading-6 text-muted">
+                {ticket.status === "resolved"
+                  ? "No work was written for this repair."
+                  : isOwner
+                    ? "Nothing written yet. Use the form above to record each visit or fix."
+                    : "Nothing written yet. The owner records the repair work here."}
               </p>
             )}
-
-            {isOwner && ticket.status !== "resolved" ? (
-              <div className="mt-6 border-t border-border pt-5">
-                <h3 className="font-semibold">Record repair work</h3>
-                <div className="mt-4">
-                  <RepairUpdateForm
-                    // A fresh form (and request ID) after every saved entry.
-                    key={updates.length}
-                    ticketId={ticket.id}
-                    today={todayInTimezone(timezone)}
-                    currency={currency}
-                  />
-                </div>
-              </div>
-            ) : null}
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          {isOwner && ticket.status === "awaiting_verification" ? (
-            <Tip tipKey="repair_closure" />
-          ) : null}
-
-          <Card title="Status">
-            {ticket.status === "resolved" && ticket.resolved_at ? (
-              <p className="mb-4 text-sm leading-6 text-muted">
-                Verified and resolved on {formatDate(ticket.resolved_at, timezone)}.
-              </p>
-            ) : null}
-            <StatusActions
-              ticketId={ticket.id}
-              version={ticket.version}
-              status={ticket.status}
-              isOwner={isOwner}
-            />
           </Card>
 
           {isOwner ? (
@@ -284,10 +282,7 @@ export default async function TicketDetailPage({
                 <>
                   <ul className="divide-y divide-border text-sm">
                     {costs.map((cost) => (
-                      <li
-                        key={cost.id}
-                        className="flex items-center justify-between gap-4 py-2 first:pt-0"
-                      >
+                      <li key={cost.id} className="flex items-center justify-between gap-4 py-2 first:pt-0">
                         <span className="text-muted">
                           {formatDate(`${cost.recorded_date}T12:00:00Z`, "UTC")}
                         </span>
@@ -299,14 +294,12 @@ export default async function TicketDetailPage({
                   </ul>
                   <p className="mt-3 flex items-center justify-between border-t border-border pt-3 font-semibold">
                     <span>Total</span>
-                    <span className="tabular-nums">
-                      {formatMoney(totalCost, currency)}
-                    </span>
+                    <span className="tabular-nums">{formatMoney(totalCost, currency)}</span>
                   </p>
                 </>
               ) : (
                 <p className="text-sm leading-6 text-muted">
-                  No costs recorded. Add a cost when you record repair work.
+                  No costs yet. Add a cost when you write in the work log.
                 </p>
               )}
             </Card>

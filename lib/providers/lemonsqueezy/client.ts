@@ -23,7 +23,11 @@ export class LemonSqueezyError extends Error {
 async function request<T>(
   config: LemonSqueezyConfig,
   path: string,
-  init?: { method?: "GET" | "POST"; body?: unknown; revalidate?: number },
+  init?: {
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    body?: unknown;
+    revalidate?: number;
+  },
 ): Promise<T> {
   let response: Response;
 
@@ -151,6 +155,35 @@ function minor(value: unknown) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(0, Math.round(value))
     : 0;
+}
+
+// Stops automatic renewal. The subscription stays active until the end of
+// the period already paid, then expires.
+export async function cancelSubscription(
+  subscriptionId: string,
+  config = getLemonSqueezyConfig(),
+) {
+  await request(config, `/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    method: "DELETE",
+  });
+}
+
+// Turns automatic renewal back on for a subscription that was cancelled but
+// has not ended yet.
+export async function resumeSubscription(
+  subscriptionId: string,
+  config = getLemonSqueezyConfig(),
+) {
+  await request(config, `/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    method: "PATCH",
+    body: {
+      data: {
+        type: "subscriptions",
+        id: subscriptionId,
+        attributes: { cancelled: false },
+      },
+    },
+  });
 }
 
 export async function getSubscriptionInvoice(

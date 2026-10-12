@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 
 import { cardClasses } from "@/components/ui/card";
 import { Logo } from "@/components/ui/logo";
+import { displayFont } from "@/lib/fonts";
+import { loadAccessForReportCode } from "@/lib/modules/billing/access";
 import { isUuid } from "@/lib/modules/equipment/validation";
 import { isTurnstileEnabled } from "@/lib/modules/public-reports/server";
+import { createAdminClient } from "@/lib/supabase/admin/client";
 import { createClient } from "@/lib/supabase/server/client";
 
 import { ReportForm } from "./report-form";
@@ -48,12 +51,15 @@ export default async function PublicEquipmentReportPage({
     notFound();
   }
 
+  const access = await loadAccessForReportCode(createAdminClient(), code);
+  const paused = access?.state === "expired";
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-6">
+    <main className={`${displayFont.variable} theme-bistro mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-6`}>
       <Logo />
       <div className="py-8">
         <p className="text-sm font-medium text-muted">{context.cafe_name}</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+        <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight">
           Report a problem
         </h1>
         <section className={`${cardClasses} mt-5 flex items-center justify-between gap-4 p-4`}>
@@ -68,6 +74,15 @@ export default async function PublicEquipmentReportPage({
           </span>
         </section>
 
+        {paused ? (
+          <div role="status" className="mt-6 rounded-lg border border-border bg-surface p-5">
+            <p className="font-semibold">Online reporting is not available here right now.</p>
+            <p className="mt-2 leading-7 text-muted">
+              Please tell a member of staff or contact the shop owner about the
+              problem with this machine.
+            </p>
+          </div>
+        ) : (
         <ReportForm
           code={code}
           turnstileSiteKey={
@@ -76,6 +91,7 @@ export default async function PublicEquipmentReportPage({
               : null
           }
         />
+        )}
       </div>
     </main>
   );

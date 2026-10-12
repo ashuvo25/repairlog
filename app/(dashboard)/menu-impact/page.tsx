@@ -50,6 +50,45 @@ export default async function MenuImpactPage() {
   const sorted = [...items].sort(
     (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status],
   );
+  // Group by machine: each machine with the menu items that need it.
+  // An item that needs two machines appears under both.
+  type Group = {
+    id: string;
+    name: string;
+    condition: (typeof items)[number]["equipment"][number]["condition"];
+    openFaults: number;
+    items: typeof items;
+  };
+  const groupMap = new Map<string, Group>();
+  for (const item of sorted) {
+    for (const machine of item.equipment) {
+      const group = groupMap.get(machine.id) ?? {
+        id: machine.id,
+        name: machine.name,
+        condition: machine.condition,
+        openFaults: machine.openFaults,
+        items: [],
+      };
+      group.items.push(item);
+      groupMap.set(machine.id, group);
+    }
+  }
+  const conditionOrder = { unavailable: 0, unknown: 1, operational: 2 } as const;
+  const groups: Group[] = [...groupMap.values()].sort(
+    (a, b) =>
+      (a.condition ? conditionOrder[a.condition] : 3) - (b.condition ? conditionOrder[b.condition] : 3) ||
+      a.name.localeCompare(b.name),
+  );
+  const unlinked = sorted.filter((item) => item.equipment.length === 0);
+  if (unlinked.length) {
+    groups.push({
+      id: "unlinked",
+      name: "Not linked to a machine",
+      condition: null,
+      openFaults: 0,
+      items: unlinked,
+    });
+  }
   const affected = items.filter((item) => item.status === "affected").length;
   const unknown = items.filter((item) => item.status === "unknown").length;
 
@@ -85,96 +124,112 @@ export default async function MenuImpactPage() {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-start">
         <section>
-          <h2 className="text-xl font-semibold tracking-tight">Menu items</h2>
-          {sorted.length ? (
+          <h2 className="font-display text-xl font-semibold tracking-tight">By machine</h2>
+          <p className="mt-1 text-sm text-muted">
+            Each machine and the menu items that need it.
+          </p>
+          {groups.length ? (
             <ul className="mt-4 space-y-3">
-              {sorted.map((item) => (
-                <li key={item.id} className={`${cardClasses} p-5`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-lg font-semibold tracking-tight">
-                      {item.name}
-                    </h3>
-                    <Badge tone={MENU_STATUS_LABELS[item.status].tone}>
-                      {MENU_STATUS_LABELS[item.status].label}
-                    </Badge>
+              {groups.map((group) => (
+                <li key={group.id} className={`${cardClasses} overflow-hidden`}>
+                  <div className="flex items-center justify-between gap-3 border-b border-border bg-subtle px-5 py-3">
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{group.name}</span>
+                      <span className="block text-xs text-muted">Machine</span>
+                    </span>
+                    {group.condition ? (
+                      <ConditionBadge condition={group.condition} />
+                    ) : (
+                      <Badge>{group.id === "unlinked" ? "No machine" : "Archived"}</Badge>
+                    )}
                   </div>
-
-                  {item.status === "affected" && item.alternative ? (
-                    <p className="mt-3 rounded-lg border border-attention-border bg-attention-soft px-4 py-3 text-sm leading-6 text-attention">
-                      <span className="font-semibold">Offer instead:</span>{" "}
-                      {item.alternative}
-                    </p>
+                  {group.openFaults > 0 && group.condition !== "unavailable" ? (
+                    <a
+                      href={`/equipment/${group.id}`}
+                      className="flex items-center justify-between gap-3 border-b border-attention-border bg-attention-soft px-5 py-2.5 text-sm text-attention hover:underline"
+                    >
+                      <span>
+                        <span className="font-semibold">Fault reported.</span> This
+                        machine is still marked {group.condition === "operational" ? "working" : "unchecked"}.
+                        Confirm its condition so the menu is right.
+                      </span>
+                      <span aria-hidden="true">→</span>
+                    </a>
                   ) : null}
-
-                  {item.equipment.length ? (
-                    <ul className="mt-3 flex flex-wrap gap-2">
-                      {item.equipment.map((machine) => (
-                        <li
-                          key={machine.id}
-                          className="flex items-center gap-2 rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm"
-                        >
-                          {machine.name}
-                          {machine.condition ? (
-                            <ConditionBadge condition={machine.condition} />
-                          ) : (
-                            <Badge>Archived</Badge>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted">
-                      No machines linked yet.
-                    </p>
-                  )}
-
-                  {isOwner ? (
-                    <details className="mt-4 border-t border-border pt-3">
-                      <summary className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">
-                        Edit item
-                      </summary>
-                      <div className="mt-3 space-y-5">
-                        <MenuItemForm
-                          machines={machines}
-                          item={{
-                            id: item.id,
-                            name: item.name,
-                            alternative: item.alternative,
-                            updatedAt: item.updatedAt,
-                            equipmentIds: item.equipment.map((machine) => machine.id),
-                          }}
-                        />
-                        <div className="border-t border-border pt-4">
-                          <ArchiveMenuItemButton
-                            menuItemId={item.id}
-                            name={item.name}
-                          />
+                  <ul className="divide-y divide-border">
+                    {group.items.map((item) => (
+                      <li key={item.id} className="px-5 py-3 pl-9">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate">{item.name}</span>
+                          <Badge tone={MENU_STATUS_LABELS[item.status].tone}>
+                            {MENU_STATUS_LABELS[item.status].label}
+                          </Badge>
                         </div>
-                      </div>
-                    </details>
-                  ) : null}
+                        {item.status === "affected" && item.alternative ? (
+                          <p className="mt-1 text-sm text-attention">
+                            Offer instead: {item.alternative}
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="mt-4 rounded-xl border border-dashed border-border-strong bg-surface px-6 py-10 text-center leading-7 text-muted">
               {isOwner
-                ? "No menu items yet. Add one and link the machines needed to prepare it."
+                ? "No menu items yet. Add one and choose the machines needed to make it."
                 : "No menu items have been set up yet."}
             </p>
           )}
         </section>
 
         {isOwner ? (
-          <Card
-            title="Add a menu item"
-            description="Link the machines needed to prepare this item."
-          >
-            <MenuItemForm machines={machines} />
-          </Card>
+          <div className="space-y-6">
+            <Card
+              title="Add a menu item"
+              description="Choose the machines needed to make it."
+            >
+              <MenuItemForm machines={machines} />
+            </Card>
+
+            {sorted.length ? (
+              <Card title="Edit menu items">
+                <ul className="divide-y divide-border">
+                  {sorted.map((item) => (
+                    <li key={item.id} className="py-1">
+                      <details className="group">
+                        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                          <span className="truncate font-medium">{item.name}</span>
+                          <span className="text-sm font-semibold text-primary group-open:hidden">Edit</span>
+                          <span className="hidden text-sm font-semibold text-muted group-open:inline">Close</span>
+                        </summary>
+                        <div className="space-y-5 pt-2 pb-4">
+                          <MenuItemForm
+                            machines={machines}
+                            item={{
+                              id: item.id,
+                              name: item.name,
+                              alternative: item.alternative,
+                              updatedAt: item.updatedAt,
+                              equipmentIds: item.equipment.map((machine) => machine.id),
+                            }}
+                          />
+                          <div className="border-t border-border pt-4">
+                            <ArchiveMenuItemButton menuItemId={item.id} name={item.name} />
+                          </div>
+                        </div>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
+          </div>
         ) : (
           <FormMessage tone="success">
-            Menu items show Affected when a machine they need is confirmed
+            A menu item shows Affected when a machine it needs is confirmed
             unavailable. Ask an owner if something looks wrong.
           </FormMessage>
         )}

@@ -50,7 +50,11 @@ export default async function NewTicketPage({
       </div>
       <Card className="mt-8">
         {equipment.length ? (
-          <NewTicketForm equipment={equipment} selectedEquipmentId={selected} />
+          <NewTicketForm
+            equipment={equipment}
+            selectedEquipmentId={selected}
+            isOwner={membership.role === "owner"}
+          />
         ) : (
           <div className="py-6 text-center">
             <p className="leading-7 text-muted">
